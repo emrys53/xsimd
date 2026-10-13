@@ -422,18 +422,26 @@ namespace xsimd
 
                 return { batch_bool<T, A> { lo_mask }, batch_bool<T, A> { hi_mask } };
             }
+
+            // store_masked is qualified: unqualified, lookup would find
+            // detail::store_masked above and stop there.
+            template <class A, class T, class Mode>
+            XSIMD_INLINE void
+            store_complex_masked_kmask(std::complex<T>* mem, batch<std::complex<T>, A> const& src, batch_bool<T, A> mask, Mode mode) noexcept
+            {
+                auto [lo_mask, hi_mask] = zip_complex_mask(mask);
+                auto src_lo = complex_low(src, A {});
+                auto src_hi = complex_high(src, A {});
+                ::xsimd::kernel::store_masked(reinterpret_cast<T*>(mem), src_lo, lo_mask, mode, A {});
+                ::xsimd::kernel::store_masked(reinterpret_cast<T*>(mem) + src.size, src_hi, hi_mask, mode, A {});
+            }
         }
 
         template <class A, class T, class Mode>
         XSIMD_INLINE void
         store_complex_masked(std::complex<T>* mem, batch<std::complex<T>, A> const& src, batch_bool<T, A> mask, Mode mode, requires_arch<avx512f>) noexcept
         {
-            auto [lo_mask, hi_mask] = detail::zip_complex_mask(mask);
-
-            auto src_lo = detail::complex_low(src, A {});
-            auto src_hi = detail::complex_high(src, A {});
-            store_masked(reinterpret_cast<T*>(mem), src_lo, lo_mask, mode, A {});
-            store_masked(reinterpret_cast<T*>(mem) + src.size, src_hi, hi_mask, mode, A {});
+            detail::store_complex_masked_kmask(mem, src, mask, mode);
         }
 
         // abs
@@ -1665,16 +1673,23 @@ namespace xsimd
                 auto imag = _mm512_permutex2var_pd(hi, imag_idx, lo);
                 return { real, imag };
             }
+
+            template <class A, class T, class Mode>
+            XSIMD_INLINE batch<std::complex<T>, A>
+            load_complex_masked_kmask(std::complex<T> const* mem, batch_bool<T, A> mask, Mode mode) noexcept
+            {
+                auto [lo_mask, hi_mask] = zip_complex_mask(mask);
+                batch<T, A> res_lo = batch<T, A>::load(reinterpret_cast<T const*>(mem), lo_mask, mode);
+                batch<T, A> res_hi = batch<T, A>::load(reinterpret_cast<T const*>(mem) + mask.size, hi_mask, mode);
+                return load_complex(res_lo, res_hi, A {});
+            }
         }
 
         template <class A, class T, class Mode>
         XSIMD_INLINE batch<std::complex<T>, A>
         load_complex_masked(std::complex<T> const* mem, batch_bool<T, A> mask, Mode mode, requires_arch<avx512f>) noexcept
         {
-            auto [lo_mask, hi_mask] = detail::zip_complex_mask(mask);
-            batch<T, A> res_lo = batch<T, A>::load(reinterpret_cast<T const*>(mem), lo_mask, mode);
-            batch<T, A> res_hi = batch<T, A>::load(reinterpret_cast<T const*>(mem) + mask.size, hi_mask, mode);
-            return detail::load_complex(res_lo, res_hi, A {});
+            return detail::load_complex_masked_kmask(mem, mask, mode);
         }
 
         // load_unaligned
