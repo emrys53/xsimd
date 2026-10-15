@@ -463,6 +463,18 @@ namespace xsimd
             return batch<std::complex<T>, A>::load_aligned(buffer.data());
         }
 
+        template <class A, class T, bool... Values, class Mode>
+        XSIMD_INLINE batch<std::complex<T>, A>
+        load_complex_masked(std::complex<T> const* mem, batch_bool_constant<T, A, Values...>, Mode, requires_arch<common>) noexcept
+        {
+            constexpr std::size_t size = batch<T, A>::size;
+            alignas(A::alignment()) std::array<std::complex<T>, size> buffer;
+            constexpr bool mask[size] = { Values... };
+            for (std::size_t i = 0; i < size; ++i)
+                buffer[i] = mask[i] ? mem[i] : std::complex<T>(0);
+            return batch<std::complex<T>, A>::load_aligned(buffer.data());
+        }
+
         template <class A, class T_in, class T_out, bool... Values, class alignment>
         XSIMD_INLINE void
         store_masked(T_out* mem, batch<T_in, A> const& src, batch_bool_constant<T_in, A, Values...> mask, alignment mode, requires_arch<common>) noexcept
@@ -887,6 +899,19 @@ namespace xsimd
             src.store_aligned(buffer.data());
             for (std::size_t i = 0; i < size; ++i)
                 if (mask.get(i))
+                    mem[i] = buffer[i];
+        }
+
+        template <class A, class T, bool... Values, class Mode>
+        XSIMD_INLINE void
+        store_complex_masked(std::complex<T>* mem, batch<std::complex<T>, A> const& src, batch_bool_constant<T, A, Values...>, Mode, requires_arch<common>) noexcept
+        {
+            constexpr std::size_t size = batch<T, A>::size;
+            alignas(A::alignment()) std::array<std::complex<T>, size> buffer;
+            constexpr bool mask[size] = { Values... };
+            src.store_aligned(buffer.data());
+            for (std::size_t i = 0; i < size; ++i)
+                if (mask[i])
                     mem[i] = buffer[i];
         }
 
